@@ -1,0 +1,10 @@
+# 5 Hermes Agent profile Hindsight 集成 config 片段
+# 合并到 /home/aiagent/.hermes/profiles/<profile>/config.yaml
+
+memory:
+  provider: hindsight
+  enabled: true
+
+# 5 profile 共享根 config.yaml（不需要在 profile 里设 system_prompt）
+# 但根 config.yaml 需在 agent 段设 system_prompt 包含完整 AI Password Vault
+# 参考 README.md 第 7 节
