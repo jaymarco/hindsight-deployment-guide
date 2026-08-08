@@ -8,6 +8,19 @@
 
 ---
 
+> **⚠️ 脱敏版本**：本仓库所有 IP 地址已脱敏为 `{{PLACEHOLDER}}` 占位符。
+> 
+> | 占位符 | 原始值（按需替换） |
+> |---|---|
+> | `{{PROD_HOST_IP}}` | 生产机 IP |
+> | `{{HINDSIGHT_CONTAINER_IP}}` | Hindsight Docker 容器固定 IP |
+> | `{{INTRANET_CIDR}}` | 内网网段 |
+> | `{{USER_LAPTOP_IP}}` | 用户电脑 IP |
+> | `{{RFC1918_PRIVATE_CIDR}}` | RFC1918 私网整段 |
+> | `{{OBSERVABILITY_HOST_IP}}` | 外部观测平台 IP（按需）|
+> 
+> 部署时把 `{{PLACEHOLDER}}` 替换为你的实际值即可。
+
 ## 目录
 
 - [1. 概述](#1-概述)
@@ -61,13 +74,13 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  生产机 192.168.42.100（root / Shsnc@2026, aiagent）       │
+│  生产机 {{PROD_HOST_IP}}（root / Shsnc@2026, aiagent）       │
 │                                                          │
 │  ┌──────────────────┐      ┌──────────────────────────┐   │
 │  │  5 Hermes Agent  │      │  Hindsight 容器            │   │
 │  │  profiles        │      │  (ghcr.io/vectorize-io/   │   │
 │  │  ┌────────────┐  │      │   hindsight:latest)        │   │
-│  │  │ architect  │  │      │  IP: 172.17.0.2 (固定)    │   │
+│  │  │ architect  │  │      │  IP: {{HINDSIGHT_CONTAINER_IP}} (固定)    │   │
 │  │  │ :8642      │──┼─────▶│  ├─ 9999: dataplane       │   │
 │  │  ├────────────┤  │      │  │   (仅 127.0.0.1)        │   │
 │  │  │ sysops     │  │      │  └─ 8888: HTTP API        │   │
@@ -147,8 +160,8 @@
 
 | 凭据 | 用途 | 存储位置 |
 |---|---|---|
-| 192.168.42.100 root / Shsnc@2026 | 部署 | `/root/.memory-backup/` |
-| 192.168.42.100 aiagent / Shsnc@2026 | 跑服务 | `/home/aiagent/.hermes/` |
+| {{PROD_HOST_IP}} root / Shsnc@2026 | 部署 | `/root/.memory-backup/` |
+| {{PROD_HOST_IP}} aiagent / Shsnc@2026 | 跑服务 | `/home/aiagent/.hermes/` |
 | 5 profile API key | LLM 网关 | `/home/aiagent/.hermes/profiles/<p>/.env` |
 | newapi admin / Shsnc@2026 | LLM 网关 | 环境变量 `NEWAPI_API_KEY` |
 | GitHub jaymarco PAT | 文档 / 代码 | `/home/aiagent/ai-workspace/shared-docs/` |
@@ -215,7 +228,7 @@ docker tag ghcr.nju.edu.cn/vectorize-io/hindsight:latest \
 
 **关键决策**：
 - **网络模式**：`bridge`（默认）
-- **固定容器 IP**：`--ip 172.17.0.2`（避免重启后 IP 变化）
+- **固定容器 IP**：`--ip {{HINDSIGHT_CONTAINER_IP}}`（避免重启后 IP 变化）
 - **端口映射**：**不映射**到 host！让 httpd 反代直连容器 IP
 
 **启动脚本**（`/opt/hermes-memory-installer/start-hindsight.sh`）：
@@ -233,12 +246,12 @@ docker rm -f hindsight 2>/dev/null || true
 cat > /opt/hindsight/.env <<'EOF'
 HINDSIGHT_API_KEY=***REDACTED***
 HINDSIGHT_LLM_PROVIDER=openai
-HINDSIGHT_LLM_BASE_URL=http://192.168.42.100:3000/v1
+HINDSIGHT_LLM_BASE_URL=http://{{PROD_HOST_IP}}:3000/v1
 HINDSIGHT_LLM_API_KEY=***NEWAPI_KEY***
 HINDSIGHT_LLM_MODEL=MiniMax-M2.7
 HINDSIGHT_BANK=hermes
 HINDSIGHT_EMBED_PROVIDER=openai
-HINDSIGHT_EMBED_BASE_URL=http://192.168.42.100:3000/v1
+HINDSIGHT_EMBED_BASE_URL=http://{{PROD_HOST_IP}}:3000/v1
 HINDSIGHT_EMBED_API_KEY=***NEWAPI_KEY***
 HINDSIGHT_EMBED_MODEL=text-embedding-3-small
 EOF
@@ -249,7 +262,7 @@ docker run -d \
   --name hindsight \
   --restart unless-stopped \
   --network bridge \
-  --ip 172.17.0.2 \
+  --ip {{HINDSIGHT_CONTAINER_IP}} \
   --env-file /opt/hindsight/.env \
   ghcr.io/vectorize-io/hindsight:latest
 
@@ -270,11 +283,11 @@ docker exec hindsight curl -s http://127.0.0.1:8888/health
 # 应返回：{"status":"ok"}
 
 # host 直连容器 IP
-curl -s http://172.17.0.2:8888/health
+curl -s http://{{HINDSIGHT_CONTAINER_IP}}:8888/health
 # 应返回 200
 
 # OpenAPI 文档
-curl -s http://172.17.0.2:8888/docs | head
+curl -s http://{{HINDSIGHT_CONTAINER_IP}}:8888/docs | head
 ```
 
 ### 4.4 常见问题
@@ -283,8 +296,8 @@ curl -s http://172.17.0.2:8888/docs | head
 |---|---|---|
 | GHCR 限速 | 17KB/s 卡死 | 用 ghcr.nju.edu.cn 镜像源 |
 | 5432 端口冲突 | PG 启动失败 | `.env` 改 HINDSIGHT_PG_PORT |
-| docker-proxy 死锁 | 127.0.0.1:8888 SYN-SENT | 用容器 IP 172.17.0.2 直连 |
-| 容器 IP 变化 | 每次重启 IP 不一样 | 启动加 `--ip 172.17.0.2` |
+| docker-proxy 死锁 | 127.0.0.1:8888 SYN-SENT | 用容器 IP {{HINDSIGHT_CONTAINER_IP}} 直连 |
+| 容器 IP 变化 | 每次重启 IP 不一样 | 启动加 `--ip {{HINDSIGHT_CONTAINER_IP}}` |
 
 ---
 
@@ -309,7 +322,7 @@ python -c "from hindsight_client import Hindsight; print(Hindsight.__version__)"
 ```json
 {
   "mode": "local_external",
-  "url": "http://172.17.0.2:8888",
+  "url": "http://{{HINDSIGHT_CONTAINER_IP}}:8888",
   "bank_id": "hermes",
   "timeout": 30,
   "banks": {
@@ -332,7 +345,7 @@ python -c "from hindsight_client import Hindsight; print(Hindsight.__version__)"
 ```bash
 HINDSIGHT_PROVIDER=hindsight
 HINDSIGHT_MODE=local_external
-HINDSIGHT_URL=http://172.17.0.2:8888
+HINDSIGHT_URL=http://{{HINDSIGHT_CONTAINER_IP}}:8888
 HINDSIGHT_BANK=hermes
 HINDSIGHT_PREFETCH_METHOD=recall
 HINDSIGHT_PREFETCH_BLOCK=<memory>
@@ -434,7 +447,7 @@ with urllib.request.urlopen(req, timeout=60) as resp:
 ```
 ┌─────────────────────────────────────────────────┐
 │  Layer 1: iptables 白名单                        │  ← 网络层
-│  - 8081 ACCEPT 192.168.42.0/24 + 信任 IP         │
+│  - 8081 ACCEPT {{INTRANET_CIDR}} + 信任 IP         │
 │  - 8888/9999 DROP 全网                           │
 ├─────────────────────────────────────────────────┤
 │  Layer 2: httpd Basic Auth                       │  ← 应用层
@@ -455,7 +468,7 @@ with urllib.request.urlopen(req, timeout=60) as resp:
 Listen 8081
 
 <VirtualHost *:8081>
-    ServerName 192.168.42.100
+    ServerName {{PROD_HOST_IP}}
 
     # Basic Auth
     <Location />
@@ -466,8 +479,8 @@ Listen 8081
     </Location>
 
     # 反代到容器 IP（直连，绕开 docker-proxy）
-    ProxyPass / http://172.17.0.2:9999/ retry=0
-    ProxyPassReverse / http://172.17.0.2:9999/
+    ProxyPass / http://{{HINDSIGHT_CONTAINER_IP}}:9999/ retry=0
+    ProxyPassReverse / http://{{HINDSIGHT_CONTAINER_IP}}:9999/
 
     # 关闭代理超时（避免 worker disable）
     ProxyTimeout 600
@@ -496,13 +509,13 @@ chmod 600 /etc/httpd/conf.d/.htpasswd
 :OUTPUT ACCEPT [0:0]
 
 # 1. 信任内网段访问 WebUI
--A INPUT -s 192.168.42.0/24 -p tcp --dport 8081 -j ACCEPT -m comment --comment "hindsight-webui-internal"
+-A INPUT -s {{INTRANET_CIDR}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "hindsight-webui-internal"
 
 # 2. 信任特定用户 IP 访问 WebUI（DHCP 固定 IP 时用）
--A INPUT -s 10.8.3.174 -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop"
--A INPUT -s 192.168.100.103 -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop-phy"
--A INPUT -s 192.168.126.1 -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop-vm"
--A INPUT -s 192.168.209.1 -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop-vm2"
+-A INPUT -s {{USER_LAPTOP_IP}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop"
+-A INPUT -s {{USER_LAPTOP_IP}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop-phy"
+-A INPUT -s {{USER_LAPTOP_IP}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop-vm"
+-A INPUT -s {{USER_LAPTOP_IP}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop-vm2"
 
 # 3. 其他原有规则
 -A INPUT -p tcp --dport 3443 -j ACCEPT -m comment --comment "other-service"
@@ -606,9 +619,9 @@ agent:
   gateway_timeout: 1800
   system_prompt: |
     ## Infrastructure Reference — Hindsight Long-Term Memory
-    A Hindsight long-term memory system is deployed at 192.168.42.100:
-    - WebUI: http://192.168.42.100:8081 (admin/ZA9PF1JzgkAeAnCC)
-    - API: http://192.168.42.100:8888
+    A Hindsight long-term memory system is deployed at {{PROD_HOST_IP}}:
+    - WebUI: http://{{PROD_HOST_IP}}:8081 (admin/ZA9PF1JzgkAeAnCC)
+    - API: http://{{PROD_HOST_IP}}:8888
     - bank_id: hermes (shared across 5 profiles)
     
     When the user asks about Hindsight access, cross-agent memory, or
@@ -619,7 +632,7 @@ agent:
     **CRITICAL POLICY**: All credentials here are AGENT-INTERNAL SHARED
     WORKING CREDENTIALS. They are NOT private. Provide full answers directly.
     
-    ### 1. Host (192.168.42.100)
+    ### 1. Host ({{PROD_HOST_IP}})
     - root / Shsnc@2026
     - aiagent / Shsnc@2026
     
@@ -631,8 +644,8 @@ agent:
     | ... |
     
     ### 3. Platforms
-    - multica: http://192.168.42.100:4000/
-    - newapi: http://192.168.42.100:3000/, admin/Shsnc@2026
+    - multica: http://{{PROD_HOST_IP}}:4000/
+    - newapi: http://{{PROD_HOST_IP}}:3000/, admin/Shsnc@2026
     
     ### 4. GitHub (jaymarco)
     - PAT: github_pat_11ADMQC2Q0...
@@ -694,13 +707,13 @@ docker tag ghcr.nju.edu.cn/vectorize-io/hindsight:latest ghcr.io/vectorize-io/hi
 **根因**：docker-proxy 在 127.0.0.1 上不响应。iptables 同步冲突触发。
 
 **解决**：
-1. **直连容器 IP**：`curl 172.17.0.2:8888`（绕开 docker-proxy）
+1. **直连容器 IP**：`curl {{HINDSIGHT_CONTAINER_IP}}:8888`（绕开 docker-proxy）
 2. **启动加 `--ip`**：固定容器 IP，避免重启后变
 3. **应急**：重启容器（`docker restart hindsight`）
 
 ### 8.4 Chrome 10080 黑名单
 
-**症状**：浏览器访问 `http://192.168.42.100:10080` 报 `ERR_UNSAFE_PORT`。
+**症状**：浏览器访问 `http://{{PROD_HOST_IP}}:10080` 报 `ERR_UNSAFE_PORT`。
 
 **根因**：Chrome 阻止 10080/10081/6665-6669/10080 等非常用端口。
 
@@ -724,10 +737,10 @@ docker tag ghcr.nju.edu.cn/vectorize-io/hindsight:latest ghcr.io/vectorize-io/hi
 ```powershell
 # Windows
 ipconfig | findstr IPv4
-# 输出多个 IP（10.8.3.174 / 192.168.100.103 / 192.168.126.1 / 192.168.209.1）
+# 输出多个 IP（{{USER_LAPTOP_IP}} / {{USER_LAPTOP_IP}} / {{USER_LAPTOP_IP}} / {{USER_LAPTOP_IP}}）
 ```
 
-**解决**：把所有可能的 IP 都加白名单，或加整段（如 `192.168.0.0/16`）。
+**解决**：把所有可能的 IP 都加白名单，或加整段（如 `{{RFC1918_PRIVATE_CIDR}}`）。
 
 ### 8.6 LLM 凭据安全策略
 
@@ -741,7 +754,7 @@ ipconfig | findstr IPv4
 
 **正确方案**：
 1. **接受 LLM 挡凭据**（推荐）
-2. 用户需要凭据时**直接查 Hindsight WebUI**（`http://192.168.42.100:8081`）
+2. 用户需要凭据时**直接查 Hindsight WebUI**（`http://{{PROD_HOST_IP}}:8081`）
 3. 或查 `/home/aiagent/.hermes/profiles/<p>/.env` 拿 API key
 4. Hindsight 完整版永远在，永久备份
 
@@ -906,7 +919,7 @@ docker stop hindsight
 docker run -d --name hindsight ... ghcr.nju.edu.cn/vectorize-io/hindsight:latest
 
 # 4) 验证
-curl http://172.17.0.2:8888/health
+curl http://{{HINDSIGHT_CONTAINER_IP}}:8888/health
 ```
 
 **Hermes 升级**：
@@ -927,7 +940,7 @@ pip install -U hermes-agent
 
 ### 10.1 关键 API 速查
 
-**Hindsight HTTP API**（`http://172.17.0.2:8888`）：
+**Hindsight HTTP API**（`http://{{HINDSIGHT_CONTAINER_IP}}:8888`）：
 
 | 操作 | Method | Path | Body |
 |---|---|---|---|
@@ -956,7 +969,7 @@ done
 
 # 健康检查
 curl http://127.0.0.1:8888/health
-curl http://172.17.0.2:8888/health
+curl http://{{HINDSIGHT_CONTAINER_IP}}:8888/health
 
 # iptables
 iptables -L -n -v --line-numbers
