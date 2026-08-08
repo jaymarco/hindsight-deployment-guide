@@ -1,0 +1,18 @@
+{
+  "mode": "local_external",
+  "url": "http://{{HINDSIGHT_CONTAINER_IP}}:8888",
+  "bank_id": "hermes",
+  "timeout": 30,
+  "banks": {
+    "hermes": {
+      "name": "hermes",
+      "description": "跨 5 profile 共享的长期记忆 bank"
+    }
+  },
+  "prefetch": {
+    "method": "recall",
+    "block_tag": "memory",
+    "max_tokens": 4000,
+    "timeout": 3.0
+  }
+}
