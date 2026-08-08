@@ -1,0 +1,36 @@
+# iptables 规则模板（Hindsight WebUI + 防绕过）
+# ⚠️ 占位符需替换为实际值后再应用
+
+*filter
+:INPUT ACCEPT [0:0]
+:FORWARD ACCEPT [0:0]
+:OUTPUT ACCEPT [0:0]
+
+# === 信任 IP 白名单（按需添加） ===
+# 内网段
+-A INPUT -s {{INTRANET_CIDR}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "hindsight-webui-internal"
+
+# 特定用户（多网卡电脑需要列出所有 IP）
+-A INPUT -s {{USER_LAPTOP_IP}} -p tcp --dport 8081 -j ACCEPT -m comment --comment "user-laptop"
+
+# 其他原有服务
+-A INPUT -p tcp --dport 3443 -j ACCEPT -m comment --comment "other-service"
+
+# loopback
+-A INPUT -i lo -j ACCEPT
+
+# === 防绕过的兜底 DROP ===
+-A INPUT -p tcp --dport 8081 -j DROP -m comment --comment "hindsight-webui-deny-public"
+-A INPUT -p tcp --dport 9999 -j DROP -m comment --comment "hindsight-dataplane-deny-public"
+
+# === SSH ===
+-A INPUT -p tcp --dport 22 -j ACCEPT
+
+# === 兜底拒绝所有其他 ===
+-A INPUT -j REJECT --reject-with icmp-host-prohibited
+COMMIT
+
+# === 应用方法 ===
+# iptables-restore < /etc/sysconfig/iptables
+# 或
+# iptables-save > /etc/sysconfig/iptables
